@@ -59,9 +59,14 @@ function cacheSet(role: string, body: string, value: unknown) {
 }
 
 /** Calls CleanAPIs, walking the failover list on provider errors, with backoff. */
-async function chat(role: 'analysis'|'date'|'rank', messages: any[], opts: { temperature?: number; json?: boolean; cacheKey?: string } = {}) {
+async function chat(role: 'analysis'|'date'|'rank', messages: any[], opts: { temperature?: number; json?: boolean; cacheKey?: string; deadlineMs?: number } = {}) {
   const ck = opts.cacheKey
   if (ck) { const hit = cacheGet<any>(role, ck); if (hit) return hit }
+  // Hard deadline: the gateway can hang on a 504, and the local engine is always
+  // able to answer. Never let a slow provider outlast the HTTP request.
+  const budget = opts.deadlineMs ?? 12000
+  const started = Date.now()
+  const bail = () => Date.now() - started > budget
   let lastErr: any
   let i = 0
   const sleep = (ms: number) => new Promise(r => setTimeout(r, ms))
@@ -69,7 +74,8 @@ async function chat(role: 'analysis'|'date'|'rank', messages: any[], opts: { tem
     // ONE attempt per model. The key has a low requests/minute budget, so a
     // retry storm across 19 models would burn the quota and 429 everything.
     // We stop at the first success instead.
-    if (i > 0) await sleep(600)
+    if (bail()) break
+    if (i > 0) await sleep(400)
     i++
     try {
       const r = await openai.chat.completions.create({
@@ -203,6 +209,7 @@ Return ONLY valid JSON with this exact shape:
     const raw = await chat('analysis', [{ role: 'user', content: prompt }], {
       temperature: 0.7, json: true,
       cacheKey: name + '|' + linkedinRaw.slice(0, 1500) + '|' + instagramRaw.slice(0, 1500),
+      deadlineMs: 14000,
     })
     const j = JSON.parse(stripFences(raw))
     return {
@@ -290,7 +297,7 @@ Write a 10-turn alternating chat, starting with A. Be specific to their actual h
 
 Return JSON: { "chat": [{"from":"${a.name}","text":"..."}], "score": 82, "verdict": "..." }`
   try {
-    const raw = await chat('date', [{ role:'user', content: prompt }], { temperature: 0.9, json: true, cacheKey: aId + '|' + bId })
+    const raw = await chat('date', [{ role:'user', content: prompt }], { temperature: 0.9, json: true, cacheKey: aId + '|' + bId, deadlineMs: 10000 })
     const j = JSON.parse(stripFences(raw))
     if (Array.isArray(j.chat) && j.chat.length) {
       return res.json({ chat: j.chat, score: j.score ?? local.score, verdict: j.verdict || local.verdict, engine: 'llm' })
@@ -319,7 +326,7 @@ CANDIDATES:
 ${others.map(o=>`ID:${o.id} NAME:${o.name} PROFILE:${JSON.stringify(o.profile)}`).join('\n').slice(0,11000)}
 Return ONLY JSON: {"rankings":[{"id":"...","score":88,"reason":"one sentence"}]} sorted by score descending.`
   try {
-    const raw = await chat('rank', [{role:'user', content: prompt}], { temperature: 0.3, json: true, cacheKey: 'rank|' + personId })
+    const raw = await chat('rank', [{role:'user', content: prompt}], { temperature: 0.3, json: true, cacheKey: 'rank|' + personId, deadlineMs: 12000 })
     let j:any = JSON.parse(stripFences(raw))
     let arr = Array.isArray(j) ? j : (j.rankings || j.results || j.ranking || [])
     if (!Array.isArray(arr) || !arr.length) throw new Error('bad rank shape')
