@@ -155,6 +155,15 @@ export default function App(){
           <div><span className="font-semibold">Values & Traits</span><div className="flex flex-wrap gap-1 mt-1">{[...selected.profile.values,...selected.profile.traits].map(x=><Pill key={x}>{x}</Pill>)}</div></div>
           <div><span className="font-semibold">Ideal partner</span><div className="text-zinc-700">{selected.profile.idealPartner}</div></div>
           <div><span className="font-semibold">Red flags</span><div className="flex flex-wrap gap-1 mt-1">{selected.profile.redFlags.map(x=><span key={x} className="px-2 py-1 text-xs bg-red-50 border border-red-200 rounded-full">{x}</span>)}</div></div>
+          {selected.profile.grounded && <div className="rounded-xl border border-emerald-200 bg-emerald-50/50 p-3">
+            <div className="text-xs font-semibold text-emerald-900">Read from the two sources</div>
+            <div className="mt-1 text-xs text-emerald-900/80 flex flex-wrap gap-x-4 gap-y-1">
+              <span>LinkedIn About: {selected.profile.grounded.linkedinAboutChars} chars</span>
+              <span>Instagram captions: {selected.profile.grounded.instagramCaptionsFound}</span>
+              {selected.profile.grounded.instagramFollowers && <span>IG audience: {selected.profile.grounded.instagramFollowers}</span>}
+              <span>signals matched: {selected.profile.grounded.matchedSignals.join(', ')}</span>
+            </div>
+          </div>}
           <details className="border rounded-xl p-3 bg-zinc-50"><summary className="cursor-pointer text-xs font-semibold">Raw extracted (Ego-Browser) — proof of 2 sources</summary><div className="mt-2 text-xs whitespace-pre-wrap break-words max-h-40 overflow-auto">{String(selected.linkedinRaw||'').slice(0,2000)}</div><div className="mt-2 text-xs whitespace-pre-wrap break-words max-h-40 overflow-auto">{String(selected.instagramRaw||'').slice(0,2000)}</div></details>
           <div className="flex gap-2"><button onClick={()=>{ setDateA(selected.id); setSelected(null); window.scrollTo(0,600)}} className="bg-pink-600 text-white px-4 py-2 rounded-full text-xs">Date with this agent</button><button onClick={()=>{ handleRank(selected.id); setSelected(null)}} className="border px-4 py-2 rounded-full text-xs">Show rankings</button></div>
         </div>}
